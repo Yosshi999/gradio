@@ -240,6 +240,142 @@ class FormComponent:
         return Form
 
 
+@document("change", "style")
+class Autocomplete(Changeable, IOComponent, SimpleSerializable, FormComponent):
+    """
+    Creates a textarea with autocompletion for user to enter string input.
+    Preprocessing: passes textarea value as a {str} into the function.
+    Postprocessing: expects a {str} returned from function and sets textarea value to it.
+    Examples-format: a {str} representing the textbox input.
+    Demos:
+    """
+
+    def __init__(
+        self,
+        choices: List[str] | None = None,
+        *,
+        value: str | Callable | None = "",
+        delimiter: str | None = None,
+        label: str | None = None,
+        every: float | None = None,
+        show_label: bool = True,
+        interactive: bool | None = None,
+        visible: bool = True,
+        elem_id: str | None = None,
+        **kwargs,
+    ):
+        """
+        Parameters:
+            choices: list of options to select from.
+            value: default value(s) selected in dropdown. If None, no value is selected by default. If callable, the function will be called whenever the app loads to set the initial value of the component.
+            delimiter: if specified, autocompletion is applied to the text from this delimiter until the cursor.
+            label: component name in interface.
+            every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
+            show_label: if True, will display label.
+            interactive: if True, choices in this dropdown will be selectable; if False, selection will be disabled. If not provided, this is inferred based on whether the component is used as an input or output.
+            visible: If False, component will be hidden.
+            elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
+        """
+        self.choices = choices or []
+        self.delimiter = delimiter
+        self.test_input = self.choices[0] if len(self.choices) else None
+        IOComponent.__init__(
+            self,
+            label=label,
+            every=every,
+            show_label=show_label,
+            interactive=interactive,
+            visible=visible,
+            elem_id=elem_id,
+            value=value,
+            **kwargs,
+        )
+        self.cleared_value = ""
+
+    def get_config(self):
+        return {
+            "choices": self.choices,
+            "delimiter": self.delimiter,
+            "value": self.value,
+            **IOComponent.get_config(self),
+        }
+
+    @staticmethod
+    def update(
+        value: str | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
+        choices: List[str] | None = None,
+        delimiter: str | None = None,
+        label: str | None = None,
+        show_label: bool | None = None,
+        interactive: bool | None = None,
+        visible: bool | None = None,
+    ):
+        updated_config = {
+            "choices": choices,
+            "delimiter": delimiter,
+            "label": label,
+            "show_label": show_label,
+            "interactive": interactive,
+            "visible": visible,
+            "value": value,
+            "__type__": "update",
+        }
+        return IOComponent.add_interactive_to_config(updated_config, interactive)
+
+    def generate_sample(self):
+        return self.choices[0]
+
+    def preprocess(
+        self, x: str | None
+    ) -> str | None:
+        """
+        Parameters:
+            x: text
+        Returns:
+            text
+        """
+        return None if x is None else str(x)
+
+    def postprocess(self, y: str | None) -> str | None:
+        """
+        Postproccess the function output y by converting it to a str before passing it to the frontend.
+        Parameters:
+            y: function output to postprocess.
+        Returns:
+            text
+        """
+        return None if y is None else str(y)
+
+    def set_interpret_parameters(self):
+        """
+        Calculates interpretation score of each choice by comparing the output against each of the outputs when alternative choices are selected.
+        """
+        return self
+
+    def get_interpretation_neighbors(self, x):
+        choices = list(self.choices)
+        choices.remove(x)
+        return choices, {}
+
+    def get_interpretation_scores(
+        self, x, neighbors, scores: List[float | None], **kwargs
+    ) -> List:
+        """
+        Returns:
+            Each value represents the interpretation score corresponding to each choice.
+        """
+        scores.insert(self.choices.index(x), None)
+        return scores
+
+    def style(self, *, container: bool | None = None, **kwargs):
+        """
+        This method can be used to change the appearance of the Dropdown.
+        Parameters:
+            container: If True, will place the component in a container - providing some extra padding around the border.
+        """
+        return Component.style(self, container=container, **kwargs)
+
+
 @document("change", "submit", "blur", "style")
 class Textbox(
     FormComponent,

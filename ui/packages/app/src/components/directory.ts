@@ -1,6 +1,7 @@
 export const component_map = {
 	accordion: () => import("./Accordion"),
 	audio: () => import("./Audio"),
+	autocomplete: () => import("./Autocomplete"),
 	box: () => import("./Box"),
 	button: () => import("./Button"),
 	chatbot: () => import("./Chatbot"),
