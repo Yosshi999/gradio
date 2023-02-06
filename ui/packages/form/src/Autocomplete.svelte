@@ -4,15 +4,18 @@
     import { BlockTitle } from "@gradio/atoms";
 
     export let value: string = "";
+	export let lines: number = 1;
     export let choices: Array<string>;
     export let delimiter: string;
     export let label: string;
     export let show_label: boolean;
+	export let max_lines: number | false;
     export let disabled = false;
 
     let el: HTMLTextAreaElement | HTMLInputElement;
     const multiselect = delimiter !== undefined;
 
+	$: value, el && lines !== max_lines && resize({ target: el });
     $: handle_change(value);
 
     const dispatch = createEventDispatcher<{
@@ -43,22 +46,21 @@
         }
     }
 
-    function getTermStart(termEnd: number) {
-        if (termEnd <= 0) {
-            return 0;
-        }
-        if (multiselect) {
-            return value.lastIndexOf(delimiter, termEnd - 1) + 1;
-        } else {
-            return 0;
-        }
+    function getTermRange(selectionStart: number) {
+        const termStart = ((selectionStart <= 0 || !multiselect) ? 0
+            : (value.lastIndexOf(delimiter, selectionStart - 1) + 1)
+        );
+        const termEnd = (!multiselect ? value.length
+            : (value.indexOf(delimiter, selectionStart) == -1 ? value.length
+                : value.indexOf(delimiter, selectionStart))
+        );
+        return [termStart, termEnd];
     }
 
     async function handleInput(e: any) {
         await tick();
         const { selectionStart } = this;
-        const termEnd = selectionStart;
-        const termStart = getTermStart(termEnd);
+        const [termStart, termEnd] = getTermRange(selectionStart);
         searchTerm = value.slice(termStart, termEnd);
     }
 
@@ -69,28 +71,71 @@
         if (option !== undefined) {
             // replace input until the cursor
             const { selectionStart } = el;
-            const termStart = getTermStart(selectionStart || 0);
-            console.log(termStart, selectionStart);
+            const [termStart, termEnd] = getTermRange(selectionStart || 0);
             if (multiselect) {
-                value = value.slice(0, termStart) + option + delimiter + value.slice(selectionStart);
+                value = value.slice(0, termStart) + option + delimiter + (
+                    value[termEnd] === "," ? value.slice(termEnd+1) : value.slice(termEnd));
             } else {
                 value = option;
                 el.blur();
             }
         }
     }
+
+	async function resize(
+		event: Event | { target: HTMLTextAreaElement | HTMLInputElement }
+	) {
+		await tick();
+		if (lines === max_lines) return;
+
+		let max =
+			max_lines === false
+				? false
+				: max_lines === undefined // default
+				? 21 * 11
+				: 21 * (max_lines + 1);
+		let min = 21 * (lines + 1);
+
+		const target = event.target as HTMLTextAreaElement;
+		target.style.height = "1px";
+
+		let scroll_height;
+		if (max && target.scrollHeight > max) {
+			scroll_height = max;
+		} else if (target.scrollHeight < min) {
+			scroll_height = min;
+		} else {
+			scroll_height = target.scrollHeight;
+		}
+
+		target.style.height = `${scroll_height}px`;
+	}
+
+	function text_area_resize(el: HTMLTextAreaElement, value: string) {
+		if (lines === max_lines) return;
+		el.style.overflowY = "scroll";
+		el.addEventListener("input", resize);
+
+		if (!value.trim()) return;
+		resize({ target: el });
+
+		return {
+			destroy: () => el.removeEventListener("input", resize)
+		};
+	}
 </script>
 
 <!-- svelte-ignore a11y-label-has-associated-control -->
 <label>
     <BlockTitle {show_label}>{label}</BlockTitle>
 
-    <input
+    <textarea
         data-testid="textbox"
-        type="text"
+        use:text_area_resize={value}
         class="scroll-hide"
         bind:value
         bind:this={el}
+        rows={lines}
         {disabled}
         on:input={handleInput}
         on:focus={() => optionsVisibility(true)}
@@ -116,7 +161,12 @@
 </label>
 
 <style>
-	input {
+	label {
+		display: block;
+		width: 100%;
+	}
+
+	textarea {
 		--ring-color: transparent;
 		display: block;
 		position: relative;
@@ -133,12 +183,12 @@
 		line-height: var(--line-sm);
 	}
 
-	input:focus {
+	textarea:focus {
 		--ring-color: var(--color-focus-ring);
 		border-color: var(--input-border-color-focus);
 	}
 
-	input[disabled] {
+	textarea[disabled] {
 		box-shadow: none;
 	}
 
@@ -165,6 +215,4 @@
 	.item:hover {
 		background: var(--color-background-secondary);
 	}
-
-
 </style>
